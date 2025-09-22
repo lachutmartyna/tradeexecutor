@@ -1,0 +1,71 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: tradeexecutor-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=LocalMSSQLPassw0rd
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - tradeexecutor-network
+
+  tradeexecutor-api:
+    build: .
+    ports:
+      - "5243:8080"
+    depends_on:
+      - sqlserver
+    container_name: tradeexecutor-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TradesDb;User Id=sa;Password=LocalMSSQLPassw0rd;TrustServerCertificate=True;MultipleActiveResultSets=true;
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__Topic=trades
+    networks:
+      - tradeexecutor-network
+   
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - tradeexecutor-network
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - tradeexecutor-network
+  kafdrop:
+    image: obsidiandynamics/kafdrop
+    container_name: kafdrop
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKER_CONNECT: kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - tradeexecutor-network
+ 
+
+
+volumes:
+  sqlserver_data:
+networks:
+  tradeexecutor-network:
+    driver: bridge
